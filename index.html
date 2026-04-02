@@ -761,8 +761,8 @@
     <!-- PANEL 1 -->
     <div class="panel active" id="panel-1">
       <div class="upload-intro">
-        <h1>Import drillhole tables</h1>
-        <p>Upload CSV files for each table. <strong>Required</strong> tables are necessary for critical validations. Optional tables are validated when loaded. Add custom tables as needed.</p>
+        <h1>Import drilling tables</h1>
+        <p>Upload CSV files for each table. <strong>Required</strong> tables are necessary for critical validations. Add custom tables as needed.</p>
       </div>
 
       <div class="section-title">Core tables</div>
@@ -778,7 +778,7 @@
       </div>
 
       <div class="proceed-bar">
-        <div class="proceed-hint" id="proceed-hint">Load at least the <strong>Collar</strong> file to continue.</div>
+        <div class="proceed-hint" id="proceed-hint">Load the <strong>Collar</strong> and <strong>Survey</strong> files to continue.</div>
         <button class="btn btn-primary" id="btn-proceed-mapping" disabled onclick="goToStep(2)">Map fields →</button>
       </div>
     </div>
@@ -931,7 +931,7 @@ const TABLE_DEFS = [
   },
   {
     key: 'survey', name: 'Survey', type: 'core',
-    desc: 'Downhole deviation stations — depth, dip and azimuth',
+    desc: 'Downhole deviation stations, depth, dip and azimuth',
     fields: [
       { key: 'holeid',  label: 'HoleID',  required: true },
       { key: 'depth',   label: 'Depth',   required: true },
