@@ -749,7 +749,7 @@
       <div class="step-num">1</div> Import Tables
     </div>
     <div class="step-tab" id="tab-2" onclick="goToStep(2)">
-      <div class="step-num">2</div> Field Mapping
+      <div class="step-num">2</div> Columns Mapping
     </div>
     <div class="step-tab" id="tab-3" onclick="goToStep(3)">
       <div class="step-num">3</div> Validation Results
@@ -786,7 +786,7 @@
     <!-- PANEL 2 -->
     <div class="panel" id="panel-2">
       <div class="upload-intro">
-        <h1>Field mapping</h1>
+        <h1>Columns mapping</h1>
         <p>Map the columns from each uploaded file to the expected validation fields. Fields marked <span style="color:var(--critical)">★</span> are required for critical checks.</p>
       </div>
       <div class="mapping-grid" id="mapping-grid"></div>
@@ -1076,7 +1076,7 @@ function updateProceedBtn() {
   const n = Object.keys(state.tables).length;
   document.getElementById('proceed-hint').innerHTML = hasCollar
     ? `<strong>${n}</strong> table(s) loaded. Ready to map fields.`
-    : 'Load at least the <strong>Collar</strong> file to continue.';
+    : 'Load the <strong>Collar</strong> and <strong>Survey</strong> files to continue.';
 }
 
 // ═══════════════════════════════════════════
@@ -1085,7 +1085,7 @@ function updateProceedBtn() {
 function goToStep(n) {
   if (n === 1) { showStep(1); return; }
   if (n === 2) {
-    if (!state.tables['collar']) { showToast('Load at least the Collar file.', 'err'); return; }
+    if (!state.tables['collar']) { showToast('Load the <strong>Collar</strong> and <strong>Survey</strong> files to continue.', 'err'); return; }
     buildMappingUI(); showStep(2);
   }
 }
