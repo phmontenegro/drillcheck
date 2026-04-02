@@ -1,0 +1,1559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Drilling DB Validator</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,300&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg:           #0a0a0a;
+    --surface:      #111111;
+    --surface2:     #181818;
+    --surface3:     #202020;
+    --border:       #2a2a2a;
+    --border-light: #3a3a3a;
+    --text:         #f0ede8;
+    --text-muted:   #7a7268;
+    --text-dim:     #3e3a34;
+    --accent:       #f07020;
+    --accent-dim:   #a04010;
+    --accent-glow:  rgba(240,112,32,0.12);
+    --accent-glow2: rgba(240,112,32,0.05);
+    --critical:     #f03030;
+    --critical-bg:  rgba(240,48,48,0.1);
+    --error:        #f07020;
+    --error-bg:     rgba(240,112,32,0.12);
+    --warning:      #f0c020;
+    --warning-bg:   rgba(240,192,32,0.08);
+    --ok:           #50c878;
+    --ok-bg:        rgba(80,200,120,0.1);
+    --info:         #80b0d8;
+    --font-mono:    'Space Mono', monospace;
+    --font-body:    'DM Sans', sans-serif;
+    --radius:       5px;
+    --radius-lg:    10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  .app { display: flex; flex-direction: column; min-height: 100vh; }
+
+  /* ── TOP STRIPE ── */
+  .accent-stripe {
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent) 0%, var(--accent-dim) 55%, transparent 100%);
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 58px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.5);
+  }
+
+  .logo {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-mark {
+    width: 30px; height: 30px;
+    background: var(--accent);
+    border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    box-shadow: 0 0 14px var(--accent-glow);
+  }
+
+  .logo-title span { color: var(--accent); }
+
+  .logo-link {
+    display: flex; align-items: center; gap: 12px;
+    cursor: pointer; text-decoration: none; color: inherit;
+    transition: opacity 0.2s;
+  }
+  .logo-link:hover { opacity: 0.8; }
+
+  .header-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+  }
+
+  .header-meta {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .header-author {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+
+  /* ── STEPS NAV ── */
+  .steps-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    display: flex;
+  }
+
+  .step-tab {
+    padding: 13px 22px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    cursor: default;
+    border-bottom: 2px solid transparent;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  .step-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .step-tab.done   { color: var(--ok); cursor: pointer; }
+  .step-tab.done:hover { opacity: 0.8; }
+
+  .step-num {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+  }
+
+  .step-tab.active .step-num { background: var(--accent); color: #000; font-weight: 700; }
+  .step-tab.done   .step-num { background: var(--ok);     color: #000; font-weight: 700; }
+
+  /* ── MAIN ── */
+  main { flex: 1; padding: 36px 32px; max-width: 1200px; margin: 0 auto; width: 100%; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── SECTION TITLES ── */
+  .section-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* ── PAGE INTRO ── */
+  .upload-intro { margin-bottom: 32px; }
+
+  .upload-intro h1 {
+    font-size: 24px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+
+  .upload-intro p { color: var(--text-muted); max-width: 620px; font-size: 13px; }
+
+  /* ── TABLE SLOTS ── */
+  .table-slots {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .table-slot {
+    background: var(--surface);
+    border: 1px dashed var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+    transition: all 0.2s;
+  }
+
+  .table-slot.has-file {
+    border-color: var(--accent);
+    border-style: solid;
+    background: var(--surface2);
+    box-shadow: 0 0 0 1px rgba(240,112,32,0.1), inset 0 0 24px var(--accent-glow2);
+  }
+
+  .table-slot.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+    transform: scale(1.02);
+  }
+
+  .slot-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+
+  .slot-type {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    padding: 3px 7px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+
+  .slot-type.core     { background: rgba(240,112,32,0.15); color: var(--accent);     border: 1px solid rgba(240,112,32,0.3); }
+  .slot-type.optional { background: rgba(120,114,104,0.12); color: var(--text-muted); border: 1px solid var(--border); }
+  .slot-type.custom   { background: rgba(80,200,120,0.12);  color: var(--ok);         border: 1px solid rgba(80,200,120,0.3); }
+
+  .slot-name { font-weight: 700; font-size: 15px; margin-bottom: 3px; }
+  .slot-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.4; }
+
+  .slot-upload-btn {
+    width: 100%;
+    padding: 8px;
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    font-family: var(--font-body);
+    transition: all 0.2s;
+    text-align: center;
+  }
+
+  .slot-upload-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-glow);
+  }
+
+  .file-info {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    background: var(--accent-glow);
+    border-radius: var(--radius);
+  }
+
+  .table-slot.has-file .file-info       { display: flex; }
+  .table-slot.has-file .slot-upload-btn { display: none; }
+
+  .file-info-name {
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-remove { cursor: pointer; color: var(--text-dim); font-size: 18px; line-height: 1; transition: color 0.15s; }
+  .file-remove:hover { color: var(--critical); }
+
+  /* ── ADD CUSTOM ── */
+  .add-custom-btn {
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-lg);
+    padding: 18px;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-family: var(--font-body);
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s;
+    min-height: 110px;
+  }
+
+  .add-custom-btn:hover { border-color: var(--ok); color: var(--ok); background: rgba(80,200,120,0.04); }
+  .add-custom-btn .icon { font-size: 22px; }
+
+  /* ── PROCEED BAR ── */
+  .proceed-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 28px;
+    padding-top: 22px;
+    border-top: 1px solid var(--border);
+  }
+
+  .proceed-hint { font-size: 13px; color: var(--text-muted); }
+
+  /* ── BUTTONS ── */
+  .btn {
+    padding: 9px 22px;
+    border-radius: var(--radius);
+    border: none;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-primary:hover:not(:disabled) { background: #f88030; box-shadow: 0 0 18px var(--accent-glow); }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--border-light); color: var(--text); }
+
+  .btn-run {
+    background: var(--accent);
+    color: #000;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 11px 28px;
+    letter-spacing: 0.03em;
+  }
+
+  .btn-run:hover { background: #f88030; box-shadow: 0 0 24px var(--accent-glow); }
+
+  /* ── MAPPING ── */
+  .mapping-grid { display: grid; gap: 20px; }
+
+  .mapping-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+
+  .mapping-card-header {
+    padding: 12px 20px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .mapping-card-title {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .mapping-card-meta { font-size: 12px; color: var(--text-muted); }
+
+  .mapping-fields {
+    padding: 16px 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+  }
+
+  .field-row { display: flex; flex-direction: column; gap: 4px; }
+
+  .field-label {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .field-required { color: var(--critical); font-size: 11px; }
+
+  .field-select {
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    padding: 7px 10px;
+    font-size: 12px;
+    font-family: var(--font-body);
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+
+  .field-select:focus           { border-color: var(--accent); }
+  .field-select.mapped          { border-color: rgba(80,200,120,0.5); }
+  .field-select.missing-required { border-color: var(--critical); }
+
+  .table-count-badge {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: var(--surface3);
+    color: var(--text-muted);
+    margin-left: 4px;
+  }
+
+  /* ── SUMMARY CARDS ── */
+  .validation-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    transition: transform 0.15s;
+    cursor: pointer;
+  }
+
+  .summary-card:hover { transform: translateY(-2px); }
+  .summary-card.c-critical { --cc: var(--critical); }
+  .summary-card.c-error    { --cc: var(--error); }
+  .summary-card.c-warning  { --cc: var(--warning); }
+  .summary-card.c-ok       { --cc: var(--ok); }
+  .summary-card.active-filter { box-shadow: 0 0 0 1px var(--cc); }
+
+  .summary-count { font-family: var(--font-mono); font-size: 34px; font-weight: 700; color: var(--cc, var(--text)); line-height: 1; }
+  .summary-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; font-family: var(--font-mono); margin-top: 2px; }
+  .summary-desc  { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+
+  .validation-progress { margin-top: 8px; height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; }
+  .validation-progress-bar { height: 100%; border-radius: 1px; transition: width 0.6s ease; background: var(--cc, var(--accent)); }
+
+  /* ── FILTER CHIPS ── */
+  .results-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+
+  .filter-chip {
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    font-family: var(--font-body);
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .filter-chip:hover { border-color: var(--border-light); color: var(--text); }
+  .filter-chip.active { background: var(--surface2); border-color: var(--accent); color: var(--accent); }
+
+  .results-search {
+    margin-left: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px 12px;
+    color: var(--text);
+    font-size: 12px;
+    font-family: var(--font-body);
+    outline: none;
+    width: 210px;
+    transition: border-color 0.2s;
+  }
+
+  .results-search:focus { border-color: var(--accent); }
+  .results-search::placeholder { color: var(--text-dim); }
+
+  /* ── ISSUES TABLE ── */
+  .issues-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+
+  .issues-table { width: 100%; border-collapse: collapse; }
+
+  .issues-table th {
+    background: var(--surface2);
+    padding: 10px 16px;
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    font-weight: 400;
+    white-space: nowrap;
+  }
+
+  .issues-table td { padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+  .issues-table tr:last-child td { border-bottom: none; }
+  .issues-table tr:hover td { background: var(--surface2); }
+
+  .severity-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .sev-critical { background: var(--critical-bg); color: var(--critical); border: 1px solid rgba(240,48,48,0.3); }
+  .sev-error    { background: var(--error-bg);    color: var(--error);    border: 1px solid rgba(240,112,32,0.3); }
+  .sev-warning  { background: var(--warning-bg);  color: var(--warning);  border: 1px solid rgba(240,192,32,0.25); }
+  .sev-info     { background: rgba(128,176,216,0.08); color: var(--info); border: 1px solid rgba(128,176,216,0.2); }
+
+  .issue-table-name { font-family: var(--font-mono); font-size: 11px; color: var(--accent); }
+
+  .issue-holeid {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text);
+    background: var(--surface3);
+    padding: 2px 7px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+  }
+
+  .issue-desc   { color: var(--text); font-size: 13px; }
+  .issue-detail { color: var(--text-muted); font-size: 12px; }
+
+  .empty-state { padding: 56px; text-align: center; color: var(--text-muted); }
+  .empty-state .icon { font-size: 36px; margin-bottom: 10px; display: block; }
+
+  /* ── EXPORT BAR ── */
+  .export-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+
+  .export-bar-label { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); }
+  .export-btns { display: flex; gap: 10px; }
+
+  /* ── FOOTER ── */
+  footer {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 12px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: auto;
+  }
+
+  .footer-left  { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); letter-spacing: 0.06em; }
+  .footer-right { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); letter-spacing: 0.04em; }
+  .footer-right span { color: var(--accent); }
+
+  /* ── LOADING ── */
+  .loading-overlay {
+    position: fixed; inset: 0;
+    background: rgba(10,10,10,0.88);
+    display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; z-index: 1000;
+    backdrop-filter: blur(4px);
+  }
+
+  .loading-overlay.active { display: flex; }
+
+  .loading-spinner {
+    width: 36px; height: 36px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); letter-spacing: 0.08em; }
+
+  /* ── MODAL ── */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: none; align-items: center; justify-content: center;
+    z-index: 200; backdrop-filter: blur(4px);
+  }
+
+  .modal-backdrop.active { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 28px; width: 440px; max-width: 95vw;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+
+  .modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .modal p  { color: var(--text-muted); font-size: 13px; margin-bottom: 20px; }
+
+  .modal-field { margin-bottom: 14px; }
+
+  .modal-label {
+    font-size: 10px; color: var(--text-muted); margin-bottom: 6px;
+    display: block; font-family: var(--font-mono);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+
+  .modal-input {
+    width: 100%; background: var(--surface3);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    color: var(--text); padding: 8px 12px; font-size: 13px;
+    font-family: var(--font-body); outline: none;
+  }
+
+  .modal-input:focus { border-color: var(--accent); }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface2); border: 1px solid var(--border-light);
+    border-radius: var(--radius); padding: 11px 16px; font-size: 13px;
+    transform: translateY(80px); opacity: 0; transition: all 0.3s;
+    z-index: 300; max-width: 340px;
+  }
+
+  .toast.show      { transform: translateY(0); opacity: 1; }
+  .toast.toast-ok  { border-color: var(--ok);      color: var(--ok); }
+  .toast.toast-err { border-color: var(--critical); color: var(--critical); }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+  @media (max-width: 768px) {
+    main { padding: 20px 16px; }
+    .validation-summary { grid-template-columns: repeat(2, 1fr); }
+    header { padding: 0 16px; }
+    .steps-bar { padding: 0 16px; overflow-x: auto; }
+    footer { padding: 10px 16px; flex-direction: column; gap: 4px; text-align: center; }
+  }
+
+  @media print {
+    header, .steps-bar, .export-bar, .results-controls, footer { display: none; }
+    body { background: #fff; color: #000; }
+    .issues-table-wrap { border: 1px solid #ccc; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="accent-stripe"></div>
+
+  <header>
+    <div class="logo">
+      <a class="logo-link" onclick="resetToHome()" title="New validation">
+        <div class="logo-mark">⬡</div>
+        <div class="logo-title">Drilling <span>DB</span> Validator</div>
+      </a>
+    </div>
+    <div class="header-right">
+      <div class="header-meta">Drillhole Database Integrity Tool · v1.3</div>
+      <div class="header-author">By Pedro Montenegro · 2026 · All rights reserved</div>
+    </div>
+  </header>
+
+  <nav class="steps-bar">
+    <div class="step-tab active" id="tab-1" onclick="goToStep(1)">
+      <div class="step-num">1</div> Import Tables
+    </div>
+    <div class="step-tab" id="tab-2" onclick="goToStep(2)">
+      <div class="step-num">2</div> Field Mapping
+    </div>
+    <div class="step-tab" id="tab-3" onclick="goToStep(3)">
+      <div class="step-num">3</div> Validation Results
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- PANEL 1 -->
+    <div class="panel active" id="panel-1">
+      <div class="upload-intro">
+        <h1>Import drillhole tables</h1>
+        <p>Upload CSV files for each table. <strong>Required</strong> tables are necessary for critical validations. Optional tables are validated when loaded. Add custom tables as needed.</p>
+      </div>
+
+      <div class="section-title">Core tables</div>
+      <div class="table-slots" id="slot-container"></div>
+
+      <div class="section-title">Additional tables</div>
+      <div class="table-slots" id="custom-slot-container">
+        <button class="add-custom-btn" onclick="openAddCustomModal()">
+          <span class="icon">+</span>
+          <span>Add custom table</span>
+          <span style="font-size:11px;color:var(--text-dim)">Geotechnical, density, recovery, etc.</span>
+        </button>
+      </div>
+
+      <div class="proceed-bar">
+        <div class="proceed-hint" id="proceed-hint">Load at least the <strong>Collar</strong> file to continue.</div>
+        <button class="btn btn-primary" id="btn-proceed-mapping" disabled onclick="goToStep(2)">Map fields →</button>
+      </div>
+    </div>
+
+    <!-- PANEL 2 -->
+    <div class="panel" id="panel-2">
+      <div class="upload-intro">
+        <h1>Field mapping</h1>
+        <p>Map the columns from each uploaded file to the expected validation fields. Fields marked <span style="color:var(--critical)">★</span> are required for critical checks.</p>
+      </div>
+      <div class="mapping-grid" id="mapping-grid"></div>
+      <div class="proceed-bar">
+        <button class="btn btn-ghost" onclick="goToStep(1)">← Back</button>
+        <button class="btn btn-run" onclick="runValidation()">▶ Run Validation</button>
+      </div>
+    </div>
+
+    <!-- PANEL 3 -->
+    <div class="panel" id="panel-3">
+      <div class="upload-intro">
+        <h1>Validation results</h1>
+        <p id="results-subtitle"></p>
+      </div>
+
+      <div class="validation-summary">
+        <div class="summary-card c-critical" id="card-critical" onclick="filterBySeverity('CRITICAL')">
+          <div class="summary-count" id="cnt-critical">0</div>
+          <div class="summary-label">Critical</div>
+          <div class="summary-desc">Prevent data use</div>
+          <div class="validation-progress"><div class="validation-progress-bar" id="bar-critical" style="width:0%"></div></div>
+        </div>
+        <div class="summary-card c-error" id="card-error" onclick="filterBySeverity('ERROR')">
+          <div class="summary-count" id="cnt-error">0</div>
+          <div class="summary-label">Error</div>
+          <div class="summary-desc">Affect trace &amp; modelling</div>
+          <div class="validation-progress"><div class="validation-progress-bar" id="bar-error" style="width:0%"></div></div>
+        </div>
+        <div class="summary-card c-warning" id="card-warning" onclick="filterBySeverity('WARNING')">
+          <div class="summary-count" id="cnt-warning">0</div>
+          <div class="summary-label">Warning</div>
+          <div class="summary-desc">Review at user's discretion</div>
+          <div class="validation-progress"><div class="validation-progress-bar" id="bar-warning" style="width:0%"></div></div>
+        </div>
+        <div class="summary-card c-ok" onclick="filterBySeverity('ALL')">
+          <div class="summary-count" id="cnt-checks">0</div>
+          <div class="summary-label">Total Issues</div>
+          <div class="summary-desc">All occurrences detected</div>
+          <div class="validation-progress"><div class="validation-progress-bar" id="bar-ok" style="width:100%"></div></div>
+        </div>
+      </div>
+
+      <div class="results-controls">
+        <button class="filter-chip active" id="chip-all"      onclick="filterBySeverity('ALL')">All</button>
+        <button class="filter-chip" id="chip-CRITICAL"        onclick="filterBySeverity('CRITICAL')"><span style="color:var(--critical)">●</span> Critical</button>
+        <button class="filter-chip" id="chip-ERROR"           onclick="filterBySeverity('ERROR')"><span style="color:var(--error)">●</span> Error</button>
+        <button class="filter-chip" id="chip-WARNING"         onclick="filterBySeverity('WARNING')"><span style="color:var(--warning)">●</span> Warning</button>
+        <button class="filter-chip" id="chip-INFO"            onclick="filterBySeverity('INFO')"><span style="color:var(--info)">●</span> Info</button>
+        <input class="results-search" type="text" placeholder="Search HoleID, description..." oninput="filterSearch(this.value)">
+      </div>
+
+      <div class="issues-table-wrap">
+        <table class="issues-table">
+          <thead>
+            <tr>
+              <th>Severity</th>
+              <th>Table</th>
+              <th>HoleID</th>
+              <th>Check</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody id="issues-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="export-bar">
+        <span class="export-bar-label" id="export-label"></span>
+        <div class="export-btns">
+          <button class="btn btn-ghost" onclick="goToStep(1)">← New validation</button>
+          <button class="btn btn-ghost" onclick="exportExcel()">⬇ Export Excel</button>
+          <button class="btn btn-primary" onclick="exportPDF()">⬇ Export PDF</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    <div class="footer-left">DRILLING DB VALIDATOR · Drillhole Database Integrity Tool · v1.3</div>
+    <div class="footer-right">By <span>Pedro Montenegro</span> · 2026 · All rights reserved</div>
+  </footer>
+
+</div>
+
+<!-- MODAL -->
+<div class="modal-backdrop" id="modal-custom">
+  <div class="modal">
+    <h3>Add custom table</h3>
+    <p>Define the table name. From/To and HoleID fields will be pre-configured for interval integrity checks.</p>
+    <div class="modal-field">
+      <label class="modal-label">Table name</label>
+      <input class="modal-input" id="custom-table-name" type="text" placeholder="e.g. Geotechnical, Density, Recovery...">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Description (optional)</label>
+      <input class="modal-input" id="custom-table-desc" type="text" placeholder="e.g. Geomechanical parameters per interval">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmAddCustom()">Add table</button>
+    </div>
+  </div>
+</div>
+
+<div class="loading-overlay" id="loading">
+  <div class="loading-spinner"></div>
+  <div class="loading-text" id="loading-text">Processing data...</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+const state = {
+  tables: {},
+  issues: [],
+  currentFilter: 'ALL',
+  searchTerm: '',
+  customTableDefs: []
+};
+
+// ═══════════════════════════════════════════
+// TABLE DEFINITIONS
+// ═══════════════════════════════════════════
+const TABLE_DEFS = [
+  {
+    key: 'collar', name: 'Collar', type: 'core',
+    desc: 'Collar coordinates, dip, azimuth and final depth for each drillhole',
+    fields: [
+      { key: 'holeid',  label: 'HoleID',     required: true  },
+      { key: 'x',       label: 'Easting',    required: true  },
+      { key: 'y',       label: 'Northing',   required: true  },
+      { key: 'z',       label: 'Elevation',  required: true  },
+      { key: 'dip',     label: 'Dip',        required: false },
+      { key: 'azimuth', label: 'Azimuth',    required: false },
+      { key: 'eoh',     label: 'FinalDepth', required: true  },
+    ]
+  },
+  {
+    key: 'survey', name: 'Survey', type: 'core',
+    desc: 'Downhole deviation stations — depth, dip and azimuth',
+    fields: [
+      { key: 'holeid',  label: 'HoleID',  required: true },
+      { key: 'depth',   label: 'Depth',   required: true },
+      { key: 'dip',     label: 'Dip',     required: true },
+      { key: 'azimuth', label: 'Azimuth', required: true },
+    ]
+  },
+  {
+    key: 'assay', name: 'Assay', type: 'optional',
+    desc: 'Analytical results per sampled interval',
+    fields: [
+      { key: 'holeid', label: 'HoleID', required: true  },
+      { key: 'from',   label: 'From',   required: false },
+      { key: 'to',     label: 'To',     required: false },
+    ]
+  },
+  {
+    key: 'lithology', name: 'Lithology', type: 'optional',
+    desc: 'Geological log per interval',
+    fields: [
+      { key: 'holeid', label: 'HoleID',    required: true  },
+      { key: 'from',   label: 'From',      required: true  },
+      { key: 'to',     label: 'To',        required: true  },
+      { key: 'code',   label: 'Lith code', required: false },
+    ]
+  },
+];
+
+// ═══════════════════════════════════════════
+// RENDER SLOTS
+// ═══════════════════════════════════════════
+function renderSlots() {
+  const c = document.getElementById('slot-container');
+  c.innerHTML = '';
+  TABLE_DEFS.forEach(def => c.appendChild(createSlot(def)));
+  renderCustomSlots();
+  updateProceedBtn();
+}
+
+function createSlot(def) {
+  const div = document.createElement('div');
+  div.className = 'table-slot';
+  div.id = `slot-${def.key}`;
+  const typeLabel = { core:'Required', optional:'Optional', custom:'Custom' }[def.type];
+  div.innerHTML = `
+    <div class="slot-header"><span class="slot-type ${def.type}">${typeLabel}</span></div>
+    <div class="slot-name">${def.name}</div>
+    <div class="slot-desc">${def.desc}</div>
+    <input type="file" accept=".csv" id="file-input-${def.key}" style="display:none" onchange="handleFileUpload('${def.key}',this)">
+    <button class="slot-upload-btn" onclick="document.getElementById('file-input-${def.key}').click()">Select CSV file</button>
+    <div class="file-info" id="file-info-${def.key}">
+      <span class="file-info-name" id="file-name-${def.key}"></span>
+      <span class="file-remove" onclick="removeFile('${def.key}')" title="Remove">×</span>
+    </div>
+  `;
+  setupDragDrop(div, def.key);
+  return div;
+}
+
+function renderCustomSlots() {
+  const c = document.getElementById('custom-slot-container');
+  const btn = c.querySelector('.add-custom-btn');
+  c.innerHTML = '';
+  state.customTableDefs.forEach(def => c.appendChild(createSlot(def)));
+  c.appendChild(btn);
+}
+
+function setupDragDrop(el, key) {
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag-over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) processFile(key, f);
+  });
+}
+
+// ═══════════════════════════════════════════
+// FILE HANDLING
+// ═══════════════════════════════════════════
+function handleFileUpload(key, input) { if (input.files[0]) processFile(key, input.files[0]); }
+
+function processFile(key, file) {
+  if (!file.name.toLowerCase().endsWith('.csv')) { showToast('Only .csv files accepted.', 'err'); return; }
+  showLoading('Reading file...');
+  Papa.parse(file, {
+    header: true, skipEmptyLines: true,
+    complete: result => {
+      hideLoading();
+      if (!result.data.length) { showToast('Empty or invalid file.', 'err'); return; }
+      state.tables[key] = { data: result.data, columns: result.meta.fields || [], fileName: file.name, mapping: {} };
+      autoMap(key);
+      document.getElementById(`slot-${key}`)?.classList.add('has-file');
+      const nm = document.getElementById(`file-name-${key}`);
+      if (nm) nm.textContent = file.name;
+      updateProceedBtn();
+      showToast(`${file.name} — ${result.data.length} records`, 'ok');
+    },
+    error: () => { hideLoading(); showToast('Error reading file.', 'err'); }
+  });
+}
+
+function autoMap(key) {
+  const allDefs = [...TABLE_DEFS, ...state.customTableDefs];
+  const def = allDefs.find(d => d.key === key);
+  if (!def) return;
+  def.fields.forEach(f => {
+    const aliases = getAliases(f.key);
+    const found = state.tables[key].columns.find(c => aliases.includes(c.toLowerCase().trim()));
+    if (found) state.tables[key].mapping[f.key] = found;
+  });
+}
+
+function getAliases(fk) {
+  const m = {
+    holeid:  ['holeid','hole_id','bhid','bh_id','dhid','dh_id','id','hole','drillhole'],
+    x:       ['x','easting','este','east','coordx','x_collar','xcollar','longitude','lon'],
+    y:       ['y','northing','norte','north','coordy','y_collar','ycollar','latitude','lat'],
+    z:       ['z','elevation','elev','cota','rl','alt','altitude','z_collar','zcollar'],
+    dip:     ['dip','dip_collar','dip_angle','inclinacao','inclinação','mergulho'],
+    azimuth: ['azimuth','azimute','az','bearing','direcao','direção','azi'],
+    eoh:     ['eoh','finaldepth','final_depth','totaldepth','total_depth','depth','td','maxdepth','max_depth','enddepth','hole_depth','holedepth'],
+    from:    ['from','de','from_m','depth_from','inicio','início'],
+    to:      ['to','ate','até','to_m','depth_to','fim'],
+    depth:   ['depth','prof','depth_m','profundidade'],
+    code:    ['code','codigo','código','lith','lithology','litho','rock','rocha','tipo','type','lithocode','lith_code'],
+  };
+  return m[fk] || [fk.toLowerCase()];
+}
+
+function removeFile(key) {
+  delete state.tables[key];
+  document.getElementById(`slot-${key}`)?.classList.remove('has-file');
+  const inp = document.getElementById(`file-input-${key}`);
+  if (inp) inp.value = '';
+  updateProceedBtn();
+}
+
+function updateProceedBtn() {
+  const hasCollar = !!state.tables['collar'];
+  document.getElementById('btn-proceed-mapping').disabled = !hasCollar;
+  const n = Object.keys(state.tables).length;
+  document.getElementById('proceed-hint').innerHTML = hasCollar
+    ? `<strong>${n}</strong> table(s) loaded. Ready to map fields.`
+    : 'Load at least the <strong>Collar</strong> file to continue.';
+}
+
+// ═══════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════
+function goToStep(n) {
+  if (n === 1) { showStep(1); return; }
+  if (n === 2) {
+    if (!state.tables['collar']) { showToast('Load at least the Collar file.', 'err'); return; }
+    buildMappingUI(); showStep(2);
+  }
+}
+
+function showStep(n) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.step-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`panel-${n}`).classList.add('active');
+  document.getElementById(`tab-${n}`).classList.add('active');
+}
+
+function markTabDone(n) {
+  const t = document.getElementById(`tab-${n}`);
+  t.classList.add('done'); t.classList.remove('active');
+}
+
+// ═══════════════════════════════════════════
+// MAPPING UI
+// ═══════════════════════════════════════════
+function buildMappingUI() {
+  const grid = document.getElementById('mapping-grid');
+  grid.innerHTML = '';
+  const allDefs = [...TABLE_DEFS, ...state.customTableDefs];
+
+  Object.keys(state.tables).forEach(key => {
+    const def = allDefs.find(d => d.key === key);
+    if (!def) return;
+    const t = state.tables[key];
+    const opts = ['— do not map —', ...t.columns];
+    const typeLabel = { core:'Required', optional:'Optional', custom:'Custom' }[def.type];
+
+    const card = document.createElement('div');
+    card.className = 'mapping-card';
+    card.innerHTML = `
+      <div class="mapping-card-header">
+        <div class="mapping-card-title">
+          <span class="slot-type ${def.type}">${typeLabel}</span>
+          ${def.name}
+          <span class="table-count-badge">${t.data.length} records</span>
+        </div>
+        <div class="mapping-card-meta">${t.fileName}</div>
+      </div>
+      <div class="mapping-fields" id="mf-${key}"></div>
+    `;
+
+    const fieldsDiv = card.querySelector(`#mf-${key}`);
+    def.fields.forEach(f => {
+      const cur = t.mapping[f.key] || '';
+      const row = document.createElement('div');
+      row.className = 'field-row';
+      row.innerHTML = `
+        <div class="field-label">${f.label}${f.required ? ' <span class="field-required">★</span>' : ''}</div>
+        <select class="field-select ${cur ? 'mapped' : ''} ${f.required && !cur ? 'missing-required' : ''}"
+          onchange="updateMapping('${key}','${f.key}',this)">
+          ${opts.map(c => { const v = c === '— do not map —' ? '' : c; return `<option value="${v}" ${v===cur?'selected':''}>${c}</option>`; }).join('')}
+        </select>
+      `;
+      fieldsDiv.appendChild(row);
+    });
+
+    // Extra field
+    const addRow = document.createElement('div');
+    addRow.className = 'field-row';
+    addRow.innerHTML = `
+      <div class="field-label">Add extra field</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="modal-input" style="flex:1;padding:7px 10px;font-size:12px" id="extra-field-name-${key}" placeholder="Field name">
+        <select class="field-select" id="extra-field-col-${key}" style="flex:1">
+          ${opts.map(c => `<option value="${c === '— do not map —' ? '' : c}">${c}</option>`).join('')}
+        </select>
+        <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="addExtraField('${key}')">+</button>
+      </div>
+    `;
+    fieldsDiv.appendChild(addRow);
+    grid.appendChild(card);
+  });
+}
+
+function updateMapping(tk, fk, sel) {
+  state.tables[tk].mapping[fk] = sel.value;
+  sel.className = `field-select ${sel.value ? 'mapped' : 'missing-required'}`;
+}
+
+function addExtraField(tk) {
+  const ni = document.getElementById(`extra-field-name-${tk}`);
+  const cs = document.getElementById(`extra-field-col-${tk}`);
+  const col = cs.value;
+  if (!col) { showToast('Select a column to map.', 'err'); return; }
+  const name = ni.value.trim() || col;
+  const allDefs = [...TABLE_DEFS, ...state.customTableDefs];
+  const def = allDefs.find(d => d.key === tk);
+  if (!def.fields.find(f => f.key === name)) def.fields.push({ key: name, label: name, required: false });
+  state.tables[tk].mapping[name] = col;
+  ni.value = '';
+  buildMappingUI();
+  showToast(`Field "${name}" mapped.`, 'ok');
+}
+
+// ═══════════════════════════════════════════
+// CUSTOM TABLE MODAL
+// ═══════════════════════════════════════════
+function openAddCustomModal() {
+  document.getElementById('custom-table-name').value = '';
+  document.getElementById('custom-table-desc').value = '';
+  document.getElementById('modal-custom').classList.add('active');
+}
+
+function closeModal() { document.getElementById('modal-custom').classList.remove('active'); }
+
+function confirmAddCustom() {
+  const name = document.getElementById('custom-table-name').value.trim();
+  const desc = document.getElementById('custom-table-desc').value.trim();
+  if (!name) { showToast('Please enter a table name.', 'err'); return; }
+  const key = name.toLowerCase().replace(/\s+/g,'_');
+  if ([...TABLE_DEFS, ...state.customTableDefs].find(d => d.key === key)) {
+    showToast('A table with this name already exists.', 'err'); return;
+  }
+  state.customTableDefs.push({
+    key, name, type: 'custom', desc: desc || 'Custom table',
+    fields: [
+      { key:'holeid', label:'HoleID', required:true  },
+      { key:'from',   label:'From',   required:false },
+      { key:'to',     label:'To',     required:false },
+    ]
+  });
+  closeModal();
+  renderCustomSlots();
+  showToast(`Table "${name}" added.`, 'ok');
+}
+
+// ═══════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════
+function getCol(tk, fk) { return state.tables[tk]?.mapping[fk] || null; }
+function getVal(row, tk, fk) { const c = getCol(tk,fk); return c ? row[c] : undefined; }
+function addIssue(sev, table, holeid, check, detail) {
+  state.issues.push({ severity:sev, table, holeid:holeid||'—', check, detail:detail||'' });
+}
+
+// ═══════════════════════════════════════════
+// VALIDATION ENGINE
+// ═══════════════════════════════════════════
+function runValidation() {
+  const missing = ['holeid','x','y','z','eoh'].filter(f => !getCol('collar',f));
+  if (missing.length) { showToast(`Map required Collar fields: ${missing.join(', ')}`, 'err'); return; }
+
+  showLoading('Running validations...');
+  state.issues = [];
+
+  setTimeout(() => {
+    try {
+      validateCollar();
+      if (state.tables['survey'])    validateSurvey();
+      if (state.tables['assay'])     validateIntervalTable('assay',     'Assay');
+      if (state.tables['lithology']) validateIntervalTable('lithology', 'Lithology');
+      state.customTableDefs.forEach(d => { if (state.tables[d.key]) validateIntervalTable(d.key, d.name); });
+      validateCrossTable();
+    } catch(e) { console.error(e); }
+    hideLoading();
+    renderResults();
+    showStep(3);
+    markTabDone(1); markTabDone(2);
+    document.getElementById('tab-3').classList.add('active');
+  }, 600);
+}
+
+// ─── COLLAR ───
+function validateCollar() {
+  const t = state.tables['collar'];
+  const holeids = new Set(), coords = {};
+
+  t.data.forEach((row, i) => {
+    const ln  = i + 2;
+    const hid = getVal(row,'collar','holeid');
+    const x   = getVal(row,'collar','x');
+    const y   = getVal(row,'collar','y');
+    const dip = getVal(row,'collar','dip');
+    const az  = getVal(row,'collar','azimuth');
+    const eoh = getVal(row,'collar','eoh');
+
+    if (!hid || !String(hid).trim()) {
+      addIssue('CRITICAL','Collar',`row ${ln}`,'Missing HoleID','Record has no drillhole identifier'); return;
+    }
+    const h = String(hid).trim();
+
+    if (holeids.has(h)) addIssue('CRITICAL','Collar',h,'Duplicate HoleID',`More than one collar with HoleID "${h}"`);
+    holeids.add(h);
+
+    [['x','Easting'],['y','Northing'],['z','Elevation']].forEach(([f,label]) => {
+      const v = getVal(row,'collar',f);
+      if (v===undefined||v===null||!String(v).trim()) addIssue('CRITICAL','Collar',h,`Missing ${label}`,`Row ${ln}`);
+    });
+
+    if (dip !== undefined && dip !== '') {
+      const d = parseFloat(dip);
+      if (isNaN(d)) addIssue('ERROR','Collar',h,'Invalid Dip value',`Value: "${dip}"`);
+      else if (d < -90 || d > 90) addIssue('ERROR','Collar',h,'Dip out of range (-90° to +90°)',`Value: ${d}°`);
+    }
+
+    if (az !== undefined && az !== '') {
+      const a = parseFloat(az);
+      if (isNaN(a)) addIssue('ERROR','Collar',h,'Invalid Azimuth value',`Value: "${az}"`);
+      else if (a < 0 || a > 360) addIssue('WARNING','Collar',h,'Azimuth out of range (0°–360°)',`Value: ${a}°`);
+    }
+
+    if (eoh !== undefined && eoh !== '') {
+      const e = parseFloat(eoh);
+      if (isNaN(e)) addIssue('ERROR','Collar',h,'Invalid FinalDepth value',`Value: "${eoh}"`);
+      else if (e <= 0) addIssue('WARNING','Collar',h,'FinalDepth must be > 0',`Value: ${e}`);
+    } else {
+      addIssue('WARNING','Collar',h,'Missing FinalDepth',`Row ${ln}`);
+    }
+
+    if (x && y) {
+      const ck = `${parseFloat(x).toFixed(1)}_${parseFloat(y).toFixed(1)}`;
+      if (coords[ck] && coords[ck] !== h)
+        addIssue('WARNING','Collar',h,'Coincident collar location (same Easting/Northing)',
+          `Same XY as "${coords[ck]}" — verify if wedge/tail/re-entry`);
+      else coords[ck] = h;
+    }
+  });
+}
+
+// ─── SURVEY ───
+function validateSurvey() {
+  const t = state.tables['survey'];
+  const collar = state.tables['collar'];
+  const eohMap = {};
+  if (collar && getCol('collar','holeid') && getCol('collar','eoh')) {
+    collar.data.forEach(r => {
+      const h = getVal(r,'collar','holeid'), e = parseFloat(getVal(r,'collar','eoh'));
+      if (h && !isNaN(e)) eohMap[String(h).trim()] = e;
+    });
+  }
+
+  const surveyed = new Set(), byHole = {};
+
+  t.data.forEach((row, i) => {
+    const ln = i+2;
+    const hid = getVal(row,'survey','holeid');
+    const dep = getVal(row,'survey','depth');
+    const dip = getVal(row,'survey','dip');
+    const az  = getVal(row,'survey','azimuth');
+
+    if (!hid || !String(hid).trim()) { addIssue('CRITICAL','Survey',`row ${ln}`,'Missing HoleID in survey',''); return; }
+    const h = String(hid).trim();
+    surveyed.add(h);
+    if (!byHole[h]) byHole[h] = [];
+
+    const d = parseFloat(dep);
+    if (isNaN(d)) { addIssue('ERROR','Survey',h,'Invalid Depth in survey',`Value: "${dep}"`); return; }
+
+    if (eohMap[h] !== undefined && d > eohMap[h] + 0.01)
+      addIssue('ERROR','Survey',h,'Survey depth exceeds FinalDepth',`Survey ${d}m > FinalDepth ${eohMap[h]}m`);
+
+    if (dip !== undefined && dip !== '') {
+      const dv = parseFloat(dip);
+      if (isNaN(dv)) addIssue('ERROR','Survey',h,'Invalid Dip in survey',`Value: "${dip}"`);
+      else if (dv < -90 || dv > 90) addIssue('ERROR','Survey',h,'Survey Dip out of range',`Value: ${dv}°`);
+    }
+
+    if (az !== undefined && az !== '') {
+      const av = parseFloat(az);
+      if (isNaN(av)) addIssue('ERROR','Survey',h,'Invalid Azimuth in survey',`Value: "${az}"`);
+    }
+
+    if (byHole[h].includes(d))
+      addIssue('WARNING','Survey',h,'Duplicate survey depth',`Depth ${d}m already exists for this drillhole`);
+    byHole[h].push(d);
+  });
+
+  if (collar) {
+    collar.data.forEach(r => {
+      const h = getVal(r,'collar','holeid');
+      if (h && !surveyed.has(String(h).trim()))
+        addIssue('INFO','Survey',String(h).trim(),'Drillhole has no survey records','Verify if vertical hole (RAB/RC)');
+    });
+  }
+}
+
+// ─── INTERVAL TABLE ───
+function validateIntervalTable(tk, tn) {
+  const t = state.tables[tk];
+  const collar = state.tables['collar'];
+  const eohMap = {};
+  if (collar && getCol('collar','holeid') && getCol('collar','eoh')) {
+    collar.data.forEach(r => {
+      const h = getVal(r,'collar','holeid'), e = parseFloat(getVal(r,'collar','eoh'));
+      if (h && !isNaN(e)) eohMap[String(h).trim()] = e;
+    });
+  }
+
+  const collarIds = new Set();
+  if (collar) collar.data.forEach(r => { const h = getVal(r,'collar','holeid'); if (h) collarIds.add(String(h).trim()); });
+
+  const haveFrom = !!getCol(tk,'from');
+  const haveTo   = !!getCol(tk,'to');
+  const byHole   = {};
+
+  t.data.forEach((row, i) => {
+    const ln  = i+2;
+    const hid = getVal(row,tk,'holeid');
+
+    if (!hid || !String(hid).trim()) { addIssue('CRITICAL',tn,`row ${ln}`,'Missing HoleID',''); return; }
+    const h = String(hid).trim();
+
+    if (collarIds.size && !collarIds.has(h))
+      addIssue('CRITICAL',tn,h,'HoleID not found in Collar',`"${h}" in ${tn} is absent from Collar`);
+
+    // From/To not mapped at all
+    if (!haveFrom || !haveTo) {
+      addIssue('WARNING',tn,h,'From/To absent','From and/or To columns not mapped — interval checks skipped');
+      return;
+    }
+
+    const fr = getVal(row,tk,'from');
+    const tr = getVal(row,tk,'to');
+
+    // From/To mapped but values missing in this row
+    const frMissing = fr===undefined||fr===null||String(fr).trim()==='';
+    const trMissing = tr===undefined||tr===null||String(tr).trim()==='';
+    if (frMissing || trMissing) {
+      addIssue('ERROR',tn,h,'From/To absent',`From="${fr}", To="${tr}" — missing value at row ${ln}`);
+      return;
+    }
+
+    const f = parseFloat(fr), tv = parseFloat(tr);
+    if (isNaN(f)||isNaN(tv)) { addIssue('ERROR',tn,h,'Invalid From/To value',`From="${fr}", To="${tr}" (row ${ln})`); return; }
+    if (tv<=f) { addIssue('ERROR',tn,h,'To ≤ From',`From=${f}, To=${tv} (row ${ln})`); return; }
+
+    if (eohMap[h]!==undefined && tv > eohMap[h]+0.01)
+      addIssue('WARNING',tn,h,'Interval exceeds FinalDepth',`To=${tv}m > FinalDepth=${eohMap[h]}m`);
+
+    if (!byHole[h]) byHole[h]=[];
+    byHole[h].push({f, t:tv});
+  });
+
+  Object.keys(byHole).forEach(h => {
+    const ivs = byHole[h].sort((a,b)=>a.f-b.f);
+    for (let i=1;i<ivs.length;i++) {
+      const prev=ivs[i-1], curr=ivs[i], gap=curr.f-prev.t;
+      if (gap>0.01) addIssue('WARNING',tn,h,'Gap between intervals',`${gap.toFixed(2)}m gap between ${prev.t}m and ${curr.f}m`);
+      else if (gap<-0.01) addIssue('ERROR',tn,h,'Overlap between intervals',`${Math.abs(gap).toFixed(2)}m overlap at ${curr.f}m–${prev.t}m`);
+    }
+  });
+}
+
+// ─── CROSS-TABLE ───
+function validateCrossTable() {
+  const collar = state.tables['collar'];
+  if (!collar) return;
+  const collarIds = new Set();
+  collar.data.forEach(r => { const h=getVal(r,'collar','holeid'); if(h) collarIds.add(String(h).trim()); });
+
+  if (state.tables['assay'] && getCol('assay','holeid')) {
+    const ids = new Set();
+    state.tables['assay'].data.forEach(r => { const h=getVal(r,'assay','holeid'); if(h) ids.add(String(h).trim()); });
+    collarIds.forEach(h => { if(!ids.has(h)) addIssue('INFO','Cross-table',h,'Drillhole has no Assay records','Verify if awaiting laboratory results'); });
+  }
+
+  if (state.tables['lithology'] && getCol('lithology','holeid')) {
+    const ids = new Set();
+    state.tables['lithology'].data.forEach(r => { const h=getVal(r,'lithology','holeid'); if(h) ids.add(String(h).trim()); });
+    collarIds.forEach(h => { if(!ids.has(h)) addIssue('INFO','Cross-table',h,'Drillhole has no Lithology records','Verify geological log'); });
+  }
+}
+
+// ═══════════════════════════════════════════
+// RENDER RESULTS
+// ═══════════════════════════════════════════
+function renderResults() {
+  const issues = state.issues;
+  const cnt = {
+    CRITICAL: issues.filter(i=>i.severity==='CRITICAL').length,
+    ERROR:    issues.filter(i=>i.severity==='ERROR').length,
+    WARNING:  issues.filter(i=>i.severity==='WARNING').length,
+    INFO:     issues.filter(i=>i.severity==='INFO').length,
+  };
+  const total = issues.length;
+
+  document.getElementById('cnt-critical').textContent = cnt.CRITICAL;
+  document.getElementById('cnt-error').textContent    = cnt.ERROR;
+  document.getElementById('cnt-warning').textContent  = cnt.WARNING;
+  document.getElementById('cnt-checks').textContent   = total;
+
+  const mx = Math.max(...Object.values(cnt), 1);
+  document.getElementById('bar-critical').style.width = (cnt.CRITICAL/mx*100)+'%';
+  document.getElementById('bar-error').style.width    = (cnt.ERROR/mx*100)+'%';
+  document.getElementById('bar-warning').style.width  = (cnt.WARNING/mx*100)+'%';
+
+  const nH = state.tables['collar']?.data.length||0, nT = Object.keys(state.tables).length;
+  document.getElementById('results-subtitle').textContent =
+    `${nH} drillhole(s) · ${nT} table(s) validated · ${total} issue(s) detected`;
+  document.getElementById('export-label').textContent =
+    `${cnt.CRITICAL} critical · ${cnt.ERROR} error(s) · ${cnt.WARNING} warning(s)`;
+
+  renderIssueTable();
+}
+
+function renderIssueTable() {
+  const tbody = document.getElementById('issues-tbody');
+  const filtered = state.issues.filter(i => {
+    const sm = state.currentFilter==='ALL' || i.severity===state.currentFilter;
+    const s  = state.searchTerm.toLowerCase();
+    const tm = !s || [i.holeid,i.check,i.table,i.detail].some(v=>v.toLowerCase().includes(s));
+    return sm && tm;
+  });
+
+  if (!filtered.length) {
+    const msg = state.currentFilter==='ALL' && !state.searchTerm
+      ? 'No issues detected. Database is clean.'
+      : 'No issues match the current filter.';
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><span class="icon">✓</span>${msg}</div></td></tr>`;
+    return;
+  }
+
+  const ord = { CRITICAL:0, ERROR:1, WARNING:2, INFO:3 };
+  filtered.sort((a,b) => ord[a.severity]-ord[b.severity]);
+  const cls = { CRITICAL:'sev-critical', ERROR:'sev-error', WARNING:'sev-warning', INFO:'sev-info' };
+
+  tbody.innerHTML = filtered.map(i => `
+    <tr>
+      <td><span class="severity-badge ${cls[i.severity]}">${i.severity}</span></td>
+      <td><span class="issue-table-name">${i.table}</span></td>
+      <td><span class="issue-holeid">${i.holeid}</span></td>
+      <td class="issue-desc">${i.check}</td>
+      <td class="issue-detail">${i.detail}</td>
+    </tr>
+  `).join('');
+}
+
+function filterBySeverity(sev) {
+  state.currentFilter = sev;
+  document.querySelectorAll('.filter-chip').forEach(c=>c.classList.remove('active'));
+  const id = sev==='ALL' ? 'chip-all' : `chip-${sev}`;
+  document.getElementById(id)?.classList.add('active');
+  renderIssueTable();
+}
+
+function filterSearch(val) { state.searchTerm=val; renderIssueTable(); }
+
+// ═══════════════════════════════════════════
+// EXPORT
+// ═══════════════════════════════════════════
+function exportExcel() {
+  if (!Object.keys(state.tables).length) { showToast('No data to export.','err'); return; }
+  const wb = XLSX.utils.book_new();
+
+  const issueRows = [['Severity','Table','HoleID','Check','Detail']];
+  state.issues.forEach(i => issueRows.push([i.severity,i.table,i.holeid,i.check,i.detail]));
+  const ws1 = XLSX.utils.aoa_to_sheet(issueRows);
+  ws1['!cols'] = [12,14,20,42,52].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb, ws1, 'Issues');
+
+  const cnt = {};
+  ['CRITICAL','ERROR','WARNING','INFO'].forEach(s=>{ cnt[s]=state.issues.filter(i=>i.severity===s).length; });
+  const ws2 = XLSX.utils.aoa_to_sheet([
+    ['Drilling DB Validator — Validation Summary'],
+    ['Author','Pedro Montenegro'],
+    ['Date', new Date().toLocaleString('en-CA')],
+    ['Drillholes', state.tables['collar']?.data.length||0],
+    ['Tables validated', Object.keys(state.tables).length],
+    [''],
+    ['Severity','Count'],
+    ['CRITICAL',cnt.CRITICAL],['ERROR',cnt.ERROR],['WARNING',cnt.WARNING],['INFO',cnt.INFO],
+    ['TOTAL',state.issues.length],
+  ]);
+  ws2['!cols'] = [{wch:22},{wch:18}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Summary');
+
+  XLSX.writeFile(wb, `DrillingDBValidator_${new Date().toISOString().slice(0,10)}.xlsx`);
+  showToast('Excel exported successfully.','ok');
+}
+
+function exportPDF() { window.print(); }
+
+// ═══════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════
+function showLoading(txt) {
+  document.getElementById('loading-text').textContent = txt||'Processing...';
+  document.getElementById('loading').classList.add('active');
+}
+function hideLoading() { document.getElementById('loading').classList.remove('active'); }
+
+let toastTimer;
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast show ${type==='ok'?'toast-ok':type==='err'?'toast-err':''}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 3500);
+}
+
+// ═══════════════════════════════════════════
+// RESET / HOME
+// ═══════════════════════════════════════════
+function resetToHome() {
+  state.tables = {};
+  state.issues = [];
+  state.currentFilter = 'ALL';
+  state.searchTerm = '';
+  state.customTableDefs = [];
+  renderSlots();
+  showStep(1);
+  document.querySelectorAll('.step-tab').forEach(t => { t.classList.remove('done','active'); });
+  document.getElementById('tab-1').classList.add('active');
+}
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+renderSlots();
+</script>
+</body>
+</html>
