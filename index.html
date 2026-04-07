@@ -319,6 +319,7 @@
   .add-custom-btn:hover { border-color: var(--ok); color: var(--ok); background: rgba(80,200,120,0.04); }
   .add-custom-btn .icon { font-size: 22px; }
 
+
   /* ── PROCEED BAR ── */
   .proceed-bar {
     display: flex;
@@ -749,7 +750,7 @@
       <div class="step-num">1</div> Import Tables
     </div>
     <div class="step-tab" id="tab-2" onclick="goToStep(2)">
-      <div class="step-num">2</div> Columns Mapping
+      <div class="step-num">2</div> Field Mapping
     </div>
     <div class="step-tab" id="tab-3" onclick="goToStep(3)">
       <div class="step-num">3</div> Validation Results
@@ -761,8 +762,8 @@
     <!-- PANEL 1 -->
     <div class="panel active" id="panel-1">
       <div class="upload-intro">
-        <h1>Import drilling tables</h1>
-        <p>Upload CSV files for each table. <strong>Required</strong> tables are necessary for critical validations. Add custom tables as needed.</p>
+        <h1>Import drillhole tables</h1>
+        <p>Upload CSV files for each table. <strong>Required</strong> tables are necessary for critical validations. Optional tables are validated when loaded. Add custom tables as needed.</p>
       </div>
 
       <div class="section-title">Core tables</div>
@@ -778,7 +779,7 @@
       </div>
 
       <div class="proceed-bar">
-        <div class="proceed-hint" id="proceed-hint">Load the <strong>Collar</strong> and <strong>Survey</strong> files to continue.</div>
+        <div class="proceed-hint" id="proceed-hint">Load at least the <strong>Collar</strong> file to continue.</div>
         <button class="btn btn-primary" id="btn-proceed-mapping" disabled onclick="goToStep(2)">Map fields →</button>
       </div>
     </div>
@@ -786,7 +787,7 @@
     <!-- PANEL 2 -->
     <div class="panel" id="panel-2">
       <div class="upload-intro">
-        <h1>Columns mapping</h1>
+        <h1>Field mapping</h1>
         <p>Map the columns from each uploaded file to the expected validation fields. Fields marked <span style="color:var(--critical)">★</span> are required for critical checks.</p>
       </div>
       <div class="mapping-grid" id="mapping-grid"></div>
@@ -867,8 +868,8 @@
   </main>
 
   <footer>
-    <div class="footer-left"> </div>
-    <div class="footer-right">By <span>Pedro Montenegro</span> </div>
+    <div class="footer-left">Drilling Database Integrity Tool · v1.3</div>
+    <div class="footer-right">By <span>Pedro Montenegro</span> · 2026 · All rights reserved</div>
   </footer>
 
 </div>
@@ -931,7 +932,7 @@ const TABLE_DEFS = [
   },
   {
     key: 'survey', name: 'Survey', type: 'core',
-    desc: 'Downhole deviation stations, depth, dip and azimuth',
+    desc: 'Downhole deviation stations — depth, dip and azimuth',
     fields: [
       { key: 'holeid',  label: 'HoleID',  required: true },
       { key: 'depth',   label: 'Depth',   required: true },
@@ -993,10 +994,30 @@ function createSlot(def) {
 
 function renderCustomSlots() {
   const c = document.getElementById('custom-slot-container');
-  const btn = c.querySelector('.add-custom-btn');
   c.innerHTML = '';
-  state.customTableDefs.forEach(def => c.appendChild(createSlot(def)));
-  c.appendChild(btn);
+  state.customTableDefs.forEach(def => {
+    c.appendChild(createSlot(def));
+    // Restore has-file visual state after re-render
+    if (state.tables[def.key]) {
+      const slot = c.querySelector(`#slot-${def.key}`);
+      if (slot) slot.classList.add('has-file');
+      const nm = c.querySelector(`#file-name-${def.key}`);
+      if (nm) nm.textContent = state.tables[def.key].fileName;
+    }
+  });
+  c.appendChild(createAddCustomBtn());
+}
+
+function createAddCustomBtn() {
+  const btn = document.createElement('button');
+  btn.className = 'add-custom-btn';
+  btn.onclick = openAddCustomModal;
+  btn.innerHTML = `
+    <span class="icon">+</span>
+    <span>Add custom table</span>
+    <span style="font-size:11px;color:var(--text-dim)">Geotechnical, density, recovery, etc.</span>
+  `;
+  return btn;
 }
 
 function setupDragDrop(el, key) {
@@ -1076,7 +1097,7 @@ function updateProceedBtn() {
   const n = Object.keys(state.tables).length;
   document.getElementById('proceed-hint').innerHTML = hasCollar
     ? `<strong>${n}</strong> table(s) loaded. Ready to map fields.`
-    : 'Load the <strong>Collar</strong> and <strong>Survey</strong> files to continue.';
+    : 'Load at least the <strong>Collar</strong> file to continue.';
 }
 
 // ═══════════════════════════════════════════
@@ -1085,7 +1106,7 @@ function updateProceedBtn() {
 function goToStep(n) {
   if (n === 1) { showStep(1); return; }
   if (n === 2) {
-    if (!state.tables['collar']) { showToast('Load the <strong>Collar</strong> and <strong>Survey</strong> files to continue.', 'err'); return; }
+    if (!state.tables['collar']) { showToast('Load at least the Collar file.', 'err'); return; }
     buildMappingUI(); showStep(2);
   }
 }
